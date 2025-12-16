@@ -1,5 +1,6 @@
 # backend/routes/admin_routes.py
 
+import mysql.connector
 from flask import Blueprint, request, jsonify
 from config.db_connector import db
 from utils.security import admin_required
@@ -155,15 +156,30 @@ def admin_update_category(category_id: int):
 def admin_delete_category(category_id: int):
     cursor = db.get_cursor()
     try:
+        # Cascade Delete Implementation
+        # 1. Find all items in this category
+        cursor.execute("SELECT item_id FROM Items WHERE category_id = %s", (category_id,))
+        items = cursor.fetchall()
+        
+        if items:
+            item_ids = [item[0] for item in items]
+            # 2. Delete Claims associated with these items
+            format_strings = ',' .join(['%s'] * len(item_ids))
+            cursor.execute(f"DELETE FROM Claims WHERE item_id IN ({format_strings})", tuple(item_ids))
+            
+            # 3. Delete Items in this category
+            cursor.execute("DELETE FROM Items WHERE category_id = %s", (category_id,))
+
+        # 4. Delete the Category
         cursor.execute("DELETE FROM Categories WHERE category_id = %s", (category_id,))
+        
         if cursor.rowcount == 0:
             db.conn.rollback()
             return jsonify({'error': 'Category not found.'}), 404
         db.conn.commit()
-        return jsonify({'message': 'Category deleted'}), 200
-    except Exception as err:
+        return jsonify({'message': 'Category and all associated items deleted successfully.'}), 200
+    except mysql.connector.Error as err:
         db.conn.rollback()
-        # Likely foreign key constraint
         return jsonify({'error': f'Database error: {err}'}), 400
     finally:
         cursor.close()

@@ -133,8 +133,8 @@ class AdminDashboard(ft.Container):
                     self.page.snack_bar = ft.SnackBar(ft.Text("Failed to load categories: Unexpected response format."), bgcolor=ft.colors.RED_400, open=True)
                     self.page.update()
                     return
-                for cat in categories:
-                    self.categories_list.controls.append(self._build_category_row(cat))
+                for i, cat in enumerate(categories, 1):
+                    self.categories_list.controls.append(self._build_category_row(cat, i))
             else:
                 self.page.snack_bar = ft.SnackBar(ft.Text("Failed to load categories"), bgcolor=ft.colors.RED_400, open=True)
         except requests.exceptions.RequestException as err:
@@ -217,14 +217,14 @@ class AdminDashboard(ft.Container):
         self.edit_mode = cid
         self._load_categories()
 
-    def _build_category_row(self, cat: dict) -> ft.Container:
+    def _build_category_row(self, cat: dict, index: int) -> ft.Container:
         cid = cat.get('category_id')
         name = cat.get('name', '')
         if cid == self.edit_mode:
             name_field = ft.TextField(label="Category name", value=name, width=300)
             return ft.Container(
                 content=ft.Row([
-                    ft.Container(ft.Text(str(cid)), width=50),
+                    ft.Container(ft.Text(str(index)), width=50),
                     ft.Container(name_field, expand=True),
                     ft.Row([
                         ft.ElevatedButton("Save", on_click=lambda e: self._save_edit_category(cid, name_field)),
@@ -239,7 +239,7 @@ class AdminDashboard(ft.Container):
         else:
             return ft.Container(
                 content=ft.Row([
-                    ft.Container(ft.Text(str(cid)), width=50),
+                    ft.Container(ft.Text(str(index)), width=50),
                     ft.Container(ft.Text(name), expand=True),
                     ft.Row([
                         ft.IconButton(ft.icons.EDIT, tooltip="Edit", on_click=lambda e, _cid=cid, _name=name: self._on_edit_click(e, _cid, _name)),
