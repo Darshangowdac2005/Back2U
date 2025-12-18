@@ -177,7 +177,6 @@ def admin_delete_category(category_id: int):
             db.conn.rollback()
             return jsonify({'error': 'Category not found.'}), 404
         db.conn.commit()
-        db.run_maintenance()
         return jsonify({'message': 'Category and all associated items deleted successfully.'}), 200
     except mysql.connector.Error as err:
         db.conn.rollback()

@@ -56,90 +56,11 @@ class Database:
         if self.conn:
             self.conn.close()
 
-    def run_maintenance(self):
-        """Trims tables to 3 records (except Users) and re-sequences all IDs."""
-        cursor = self.get_cursor(dictionary=True)
-        try:
-            print("🚀 Running automated database maintenance...")
-            
-            # 1. Fetch all data
-            cursor.execute("SELECT * FROM Users ORDER BY user_id")
-            users = cursor.fetchall()
-            
-            cursor.execute("SELECT * FROM Categories ORDER BY category_id")
-            categories = cursor.fetchall()
-            
-            cursor.execute("SELECT * FROM Items ORDER BY item_id")
-            items = cursor.fetchall()
-            
-            cursor.execute("SELECT * FROM Claims ORDER BY claim_id")
-            claims = cursor.fetchall()
-            
-            cursor.execute("SELECT * FROM Notifications ORDER BY notification_id")
-            notifications = cursor.fetchall()
-            
-            # 2. Truncate tables (disable FK checks first)
-            cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
-            cursor.execute("TRUNCATE TABLE Notifications")
-            cursor.execute("TRUNCATE TABLE Claims")
-            cursor.execute("TRUNCATE TABLE Items")
-            cursor.execute("TRUNCATE TABLE Categories")
-            cursor.execute("TRUNCATE TABLE Users")
-            
-            # 3. Re-insert with new IDs and build maps
-            user_id_map = {}
-            for u in users:
-                old_id = u['user_id']
-                cursor.execute(
-                    "INSERT INTO Users (user_id, name, email, role, password_hash) VALUES (%s, %s, %s, %s, %s)",
-                    (None, u['name'], u['email'], u['role'], u['password_hash'])
-                )
-                user_id_map[old_id] = cursor.lastrowid
-                
-            category_id_map = {}
-            for c in categories:
-                old_id = c['category_id']
-                cursor.execute("INSERT INTO Categories (category_id, name) VALUES (%s, %s)", (None, c['name']))
-                category_id_map[old_id] = cursor.lastrowid
-                
-            item_id_map = {}
-            for it in items:
-                old_id = it['item_id']
-                new_reported_by = user_id_map.get(it['reported_by'])
-                new_category_id = category_id_map.get(it['category_id'])
-                if new_reported_by and new_category_id:
-                    cursor.execute(
-                        "INSERT INTO Items (item_id, reported_by, category_id, title, description, status, date_reported) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                        (None, new_reported_by, new_category_id, it['title'], it['description'], it['status'], it['date_reported'])
-                    )
-                    item_id_map[old_id] = cursor.lastrowid
-                
-            for cl in claims:
-                new_item_id = item_id_map.get(cl['item_id'])
-                new_claimant_id = user_id_map.get(cl['claimant_id'])
-                if new_item_id and new_claimant_id:
-                    cursor.execute(
-                        "INSERT INTO Claims (claim_id, item_id, claimant_id, claim_status, verification_details, claimed_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                        (None, new_item_id, new_claimant_id, cl['claim_status'], cl['verification_details'], cl['claimed_at'])
-                    )
-                    
-            for n in notifications:
-                new_user_id = user_id_map.get(n['user_id'])
-                if new_user_id:
-                    cursor.execute(
-                        "INSERT INTO Notifications (notification_id, user_id, message, type, status, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                        (None, new_user_id, n['message'], n['type'], n['status'], n['created_at'])
-                    )
-
-            cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
-            self.conn.commit()
-            print("✅ Maintenance completed: Sequential IDs & Trimmed data.")
-            
-        except Exception as e:
-            print(f"❌ Maintenance failed: {e}")
-            self.conn.rollback()
-        finally:
-            cursor.close()
+    def close(self):
+        if self.cursor:
+            self.cursor.close()
+        if self.conn:
+            self.conn.close()
 
 db = Database()
 db.connect()
@@ -177,8 +98,8 @@ def create_tables_and_seed():
             description TEXT,
             status ENUM('lost', 'found', 'claim_pending', 'resolved') NOT NULL,
             date_reported DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (reported_by) REFERENCES Users(user_id) ON UPDATE CASCADE,
-            FOREIGN KEY (category_id) REFERENCES Categories(category_id) ON UPDATE CASCADE
+            FOREIGN KEY (reported_by) REFERENCES Users(user_id),
+            FOREIGN KEY (category_id) REFERENCES Categories(category_id)
         )
     """)
     
@@ -191,8 +112,8 @@ def create_tables_and_seed():
             claim_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
             verification_details TEXT,
             claimed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (item_id) REFERENCES Items(item_id) ON UPDATE CASCADE,
-            FOREIGN KEY (claimant_id) REFERENCES Users(user_id) ON UPDATE CASCADE
+            FOREIGN KEY (item_id) REFERENCES Items(item_id),
+            FOREIGN KEY (claimant_id) REFERENCES Users(user_id)
         )
     """)
     
@@ -205,7 +126,7 @@ def create_tables_and_seed():
             type ENUM('email', 'system') NOT NULL,
             status ENUM('sent', 'pending', 'read') NOT NULL DEFAULT 'pending',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES Users(user_id) ON UPDATE CASCADE
+            FOREIGN KEY (user_id) REFERENCES Users(user_id)
         )
     """)
     
