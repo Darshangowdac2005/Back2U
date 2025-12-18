@@ -1,0 +1,8 @@
+SUCCESS: Sent to testindemoproj@gmail.com
+ERROR sending email to testindemoproj@gmail.com: Connection unexpectedly closed: [WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond
+ERROR sending email to darshangowda23.iot@cambridge.edu.in: [Errno 11001] getaddrinfo failed
+ERROR sending email to darshangowdac2005@gmail.com: [Errno 11001] getaddrinfo failed
+SUCCESS: Sent to testindemoproj@gmail.com
+SUCCESS: Sent to testindemoproj@gmail.com
+SUCCESS: Sent to testindemoproj@gmail.com
+SUCCESS: Sent to testindemoproj@gmail.com
