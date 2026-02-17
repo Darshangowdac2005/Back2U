@@ -11,19 +11,28 @@ from models.notification_model import Notification
 
 load_dotenv()
 
-def get_user_email(user_id):
+def get_user_email(user_id, cursor=None):
     """Fetches user email and name from the database."""
-    try:
+    should_close = False
+    if cursor is None:
         cursor = db.get_cursor(dictionary=True)
+        should_close = True
+        
+    try:
         cursor.execute("SELECT email, name FROM Users WHERE user_id = %s", (user_id,))
         user = cursor.fetchone()
-        cursor.close()
+        if should_close:
+            cursor.close()
+            
         if not user:
             print(f"Warning: User with ID {user_id} not found.")
             return None
         return user
     except Exception as e:
         print(f"Error fetching user {user_id}: {e}")
+        if should_close:
+             try: cursor.close()
+             except: pass
         return None
 
 def send_email(recipient_email, subject, body):
@@ -68,48 +77,97 @@ def send_email(recipient_email, subject, body):
 
 def insert_notification(user_id, message, notification_type):
     """Logs the notification in the database."""
+    # Note: This uses the global db, which is fine for main thread but NOT for background threads.
+    # Background threads should use custom insertion logic as implemented in send_claim_resolved_emails.
     cursor = db.get_cursor()
     query = "INSERT INTO Notifications (user_id, message, type, status) VALUES (%s, %s, %s, %s)"
     cursor.execute(query, (user_id, message, notification_type, Notification.STATUSES['SENT']))
     db.conn.commit()
     cursor.close()
 
-def send_claim_resolved_emails(item_id, claimant_id, admin_id):
-    """Sends resolution emails to both the reporter and the claimant."""
-    try:
-        cursor = db.get_cursor(dictionary=True)
+def log_debug(msg):
+    with open("crash_debug.log", "a") as f:
+        f.write(f"{msg}\n")
 
+def send_claim_resolved_emails(item_id, claimant_id, admin_id):
+    """
+    Sends resolution emails to both the reporter and the claimant.
+    Uses the thread-safe db singleton.
+    """
+    log_debug(f"Starting send_claim_resolved_emails for Item {item_id}")
+    
+    try:
+        log_debug("Getting cursor from thread-local db...")
+        cursor = db.get_cursor(dictionary=True)
+        
         # 1. Get Item Reporter (Original Lost/Found User)
+        log_debug("Fetching item info...")
         cursor.execute("SELECT reported_by, title FROM Items WHERE item_id = %s", (item_id,))
         item_info = cursor.fetchone()
+        
         if not item_info:
             print(f"Warning: Item with ID {item_id} not found.")
+            log_debug("Item not found.")
             cursor.close()
             return
+            
         reporter_id = item_info['reported_by']
         item_title = item_info['title']
 
-        reporter = get_user_email(reporter_id)
-        claimant = get_user_email(claimant_id)
+        # Pass our thread-local cursor
+        log_debug(f"Fetching reporter {reporter_id}...")
+        reporter = get_user_email(reporter_id, cursor=cursor)
+        log_debug(f"Fetching claimant {claimant_id}...")
+        claimant = get_user_email(claimant_id, cursor=cursor)
 
+        log_debug("Closing cursor...")
         cursor.close()
 
         if not reporter or not claimant:
             print("Warning: Missing user data for reporter or claimant. Skipping email notifications.")
+            log_debug("Missing user data.")
             return
 
         # Email to Original Reporter (Item Found/Returned)
         reporter_subject = f"SUCCESS: Your Item '{item_title}' Has Been RESOLVED!"
         reporter_body = f"Hello {reporter['name']},\n\nGood news! Your item, '{item_title}', has been verified by the Admin (ID: {admin_id}) and matched with the person who found it. Please contact the claimant, {claimant['name']}, to arrange collection. Your contact details have been shared with them."
 
+        log_debug("Sending email to reporter...")
         if send_email(reporter['email'], reporter_subject, reporter_body):
-            insert_notification(reporter_id, "Item successfully matched and resolved. Check your email for details!", Notification.TYPES['EMAIL'])
+             try:
+                log_debug("Inserting notification for reporter...")
+                cursor_notif = db.get_cursor()
+                query = "INSERT INTO Notifications (user_id, message, type, status) VALUES (%s, %s, %s, %s)"
+                cursor_notif.execute(query, (reporter_id, "Item successfully matched and resolved. Check your email for details!", Notification.TYPES['EMAIL'], Notification.STATUSES['SENT']))
+                db.conn.commit()
+                cursor_notif.close()
+                log_debug("Notification inserted.")
+             except Exception as e:
+                 print(f"Error inserting notification: {e}")
+                 log_debug(f"Error inserting notification: {e}")
 
         # Email to Claimant (Verification Approved)
         claimant_subject = f"SUCCESS: Your Claim on '{item_title}' Has Been APPROVED!"
         claimant_body = f"Hello {claimant['name']},\n\nYour claim on '{item_title}' has been successfully approved! Please contact the original reporter, {reporter['name']}, to arrange the return of the item. Their email is {reporter['email']}."
 
+        log_debug("Sending email to claimant...")
         if send_email(claimant['email'], claimant_subject, claimant_body):
-            insert_notification(claimant_id, "Claim approved. Check your email for reporter's contact info.", Notification.TYPES['EMAIL'])
+             try:
+                log_debug("Inserting notification for claimant...")
+                cursor_notif = db.get_cursor()
+                query = "INSERT INTO Notifications (user_id, message, type, status) VALUES (%s, %s, %s, %s)"
+                cursor_notif.execute(query, (claimant_id, "Claim approved. Check your email for reporter's contact info.", Notification.TYPES['EMAIL'], Notification.STATUSES['SENT']))
+                db.conn.commit()
+                cursor_notif.close()
+                log_debug("Notification inserted.")
+             except Exception as e:
+                 print(f"Error inserting notification: {e}")
+                 log_debug(f"Error inserting notification: {e}")
+
     except Exception as e:
-        print(f"Error in send_claim_resolved_emails: {e}")
+        print(f"Error in send_claim_resolved_emails (background): {e}")
+        log_debug(f"CRASH: {e}")
+    finally:
+        # Close the connection for THIS thread to avoid leaks
+        db.close()
+

@@ -167,4 +167,5 @@ def main(page: ft.Page):
     page.go(page.route)
 
 if __name__ == "__main__":
-    ft.app(target=main, view=ft.WEB_BROWSER)
+    print("Starting Flet app on http://localhost:8550")
+    ft.app(target=main, view=ft.WEB_BROWSER, port=8550)

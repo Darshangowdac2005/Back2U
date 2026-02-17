@@ -70,11 +70,18 @@ def resolve_claim():
                            (Item.STATUSES['RESOLVED'], item_id))
 
             # 3. Fetch item reporter and send notification emails (utility function)
+            # Run in background to avoid blocking the response (emails can take seconds)
             try:
-                send_claim_resolved_emails(item_id, claimant_id, admin_id)
+                import threading
+                email_thread = threading.Thread(
+                    target=send_claim_resolved_emails,
+                    args=(item_id, claimant_id, admin_id)
+                )
+                email_thread.daemon = True # Ensure thread doesn't block shutdown
+                email_thread.start()
+                print(f"Started email notification thread for Claim {claim_id}")
             except Exception as e:
-                print(f"Warning: Failed to send notification emails: {e}")
-                # Continue with approval even if email fails
+                print(f"Warning: Failed to start email thread: {e}")
 
             db.conn.commit()
             return jsonify({"message": "Claim approved and resolved successfully. Notifications sent."}), 200

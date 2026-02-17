@@ -10,7 +10,9 @@ db_config = {
     'host': os.getenv('MYSQL_HOST'),
     'user': os.getenv('MYSQL_USER'),
     'password': os.getenv('MYSQL_PASSWORD'),
-    'database': os.getenv('MYSQL_DB')
+    'database': os.getenv('MYSQL_DB'),
+    'use_pure': True,
+    'ssl_disabled': True
 }
 
 # If database doesn't exist, connect without it first
@@ -28,42 +30,54 @@ except mysql.connector.Error as err:
     print(f"❌ Error creating database: {err}")
     exit(1)
 
+import threading
+
 class Database:
     def __init__(self):
-        self.conn = None
-        self.cursor = None
+        self._local = threading.local()
 
     def connect(self):
+        """Creates a new connection for the current thread."""
         try:
-            self.conn = mysql.connector.connect(**db_config)
-            self.cursor = self.conn.cursor(dictionary=True)
-            print("✅ MySQL Database connected successfully!")
+            conn = mysql.connector.connect(**db_config)
+            print(f"✅ MySQL Database connected successfully in thread {threading.get_ident()}!")
+            return conn
         except mysql.connector.Error as err:
             print(f"❌ Error connecting to MySQL: {err}")
-            exit(1)
+            return None
+
+    @property
+    def conn(self):
+        if not hasattr(self._local, 'conn') or self._local.conn is None:
+            self._local.conn = self.connect()
+        return self._local.conn
 
     def get_cursor(self, dictionary=False):
         try:
-            self.conn.ping(reconnect=True)
+            if self.conn:
+                self.conn.ping(reconnect=True)
+            else:
+                self._local.conn = self.connect()
         except mysql.connector.Error:
             print("Connection lost, reconnecting...")
-            self.connect()
-        return self.conn.cursor(dictionary=dictionary)
+            self._local.conn = self.connect()
+            
+        if self.conn:
+            return self.conn.cursor(dictionary=dictionary)
+        else:
+            raise Exception("Failed to establish database connection")
 
     def close(self):
-        if self.cursor:
-            self.cursor.close()
-        if self.conn:
-            self.conn.close()
-
-    def close(self):
-        if self.cursor:
-            self.cursor.close()
-        if self.conn:
-            self.conn.close()
+        if hasattr(self._local, 'conn') and self._local.conn:
+            try:
+                self._local.conn.close()
+                self._local.conn = None
+            except:
+                pass
 
 db = Database()
-db.connect()
+# Note: No global db.connect() here, it will connect on demand per thread.
+
 
 def create_tables_and_seed():
     cursor = db.get_cursor()
