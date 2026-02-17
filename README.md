@@ -5,10 +5,11 @@ Back2U is a comprehensive lost and found management system designed to help user
 ## Features
 
 - **User Authentication**: Secure login and signup with JWT-based authentication
-- **Item Reporting**: Users can report lost or found items with detailed descriptions, categories, and images
+- **Item Reporting**: Users can report lost or found items with detailed descriptions, categories, and titles
 - **Public Item Listings**: Browse and search through reported items with filtering options
 - **Claim Management**: Users can claim items they believe are theirs
-- **Admin Dashboard**: Administrators can verify claims, resolve cases, and send notifications
+- **Category Management**: Administrators can create, update, and delete item categories
+- **Admin Dashboard**: Administrators can verify claims, resolve cases, and manage categories
 - **Email Notifications**: Automated email notifications for claim updates and resolutions
 - **Responsive Design**: Modern, dark/light theme toggleable interface
 
@@ -16,10 +17,11 @@ Back2U is a comprehensive lost and found management system designed to help user
 
 ### Backend
 - **Flask**: RESTful API framework
-- **MySQL**: Database for storing users, items, claims, and notifications
+- **MySQL**: Database for storing users, items, claims, notifications, and categories
 - **bcrypt**: Password hashing
 - **JWT**: Token-based authentication
 - **Flask-CORS**: Cross-origin resource sharing
+- **python-dotenv**: Environment variable management
 
 ### Frontend
 - **Flet**: Python-based UI framework for web applications
@@ -138,13 +140,20 @@ The application will open in your default web browser.
 - `POST /api/auth/login` - User login
 
 ### Items
-- `GET /api/items` - Get all public items
+- `GET /api/items` - Get items (supports `status`, `search`, and `include_resolved` filters)
 - `POST /api/items` - Report a new item (authenticated)
-- `GET /api/items/<id>` - Get item details
+- `POST /api/items/<id>/claim` - Submit a claim for an item (authenticated)
+
+### Categories
+- `GET /api/categories` - List all categories
 
 ### Admin
-- `GET /api/admin/claims` - Get all claims (admin only)
-- `PUT /api/admin/claims/<id>` - Update claim status (admin only)
+- `GET /api/admin/claims/pending` - Get all pending claims (admin only)
+- `POST /api/admin/claims/resolve` - Approve or reject a claim (admin only)
+- `GET /api/admin/categories` - List categories (admin only)
+- `POST /api/admin/categories` - Create a new category (admin only)
+- `PUT /api/admin/categories/<id>` - Update category name (admin only)
+- `DELETE /api/admin/categories/<id>` - Delete category and associated items (admin only)
 
 ## Project Structure
 
@@ -152,7 +161,7 @@ The application will open in your default web browser.
 back2u-python-mysql/
 ├── backend/
 │   ├── config/
-│   │   ├── db_connector.py      # MySQL connection setup
+│   │   ├── db_connector.py      # MySQL connection & table self-initialization
 │   ├── models/
 │   │   ├── user_model.py        # User data model
 │   │   ├── item_model.py        # Item data model
@@ -161,28 +170,30 @@ back2u-python-mysql/
 │   │   └── category_model.py    # Category data model
 │   ├── routes/
 │   │   ├── auth_routes.py       # Authentication endpoints
-│   │   ├── item_routes.py       # Item management endpoints
-│   │   └── admin_routes.py      # Admin endpoints
+│   │   ├── item_routes.py       # Item and claim management endpoints
+│   │   ├── category_routes.py   # Public category endpoints
+│   │   └── admin_routes.py      # Admin dashboard & category management
 │   ├── utils/
-│   │   ├── security.py          # Password hashing and JWT
-│   │   └── notification.py      # Email notifications
+│   │   ├── security.py          # Password hashing and JWT decorators
+│   │   └── notification.py      # Email notification logic
 │   ├── server.py                # Flask app entry point
 │   ├── requirements.txt
 │   └── .env
 ├── frontend/
 │   ├── views/
-│   │   ├── login_view.py        # Login/signup UI
+│   │   ├── login_view.py        # Login UI
+│   │   ├── signup_view.py       # User signup UI
 │   │   ├── home_view.py         # Item listings UI
 │   │   ├── report_item_view.py  # Item reporting UI
 │   │   └── admin_dashboard.py   # Admin dashboard UI
 │   ├── components/
-│   │   ├── navbar.py            # Navigation component
+│   │   ├── navbar.py            # Navigation component with theme toggle
 │   │   └── item_card.py         # Item display component
-│   ├── api_client.py            # API communication
-│   ├── main.py                  # Flet app entry point
+│   ├── api_client.py            # API communication layer
+│   ├── main.py                  # Flet app entry point & routing
 │   └── requirements.txt
-├── .gitignore
-├── LICENSE.md
+├── schema.sql                   # Database schema reference
+├── TODO.md                      # Testing and remaining tasks
 └── README.md
 ```
 
