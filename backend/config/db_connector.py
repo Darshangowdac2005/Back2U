@@ -25,9 +25,9 @@ try:
     temp_conn.commit()
     temp_cursor.close()
     temp_conn.close()
-    print("✅ Database 'back2u' created successfully!")
+    print("Database 'back2u' created successfully!")
 except mysql.connector.Error as err:
-    print(f"❌ Error creating database: {err}")
+    print(f"X Error creating database: {err}")
     exit(1)
 
 import threading
@@ -40,10 +40,10 @@ class Database:
         """Creates a new connection for the current thread."""
         try:
             conn = mysql.connector.connect(**db_config)
-            print(f"✅ MySQL Database connected successfully in thread {threading.get_ident()}!")
+            print(f"OK MySQL Database connected successfully in thread {threading.get_ident()}!")
             return conn
         except mysql.connector.Error as err:
-            print(f"❌ Error connecting to MySQL: {err}")
+            print(f"Error connecting to MySQL: {err}")
             return None
 
     @property
@@ -157,9 +157,9 @@ def create_tables_and_seed():
                 END IF;
             END;
         """)
-        print("✅ Trigger 'update_item_status_on_claim_approval' created successfully.")
+        print("OK Trigger 'update_item_status_on_claim_approval' created successfully.")
     except mysql.connector.Error as err:
-        print(f"❌ Failed to create trigger: {err}")
+        print(f"X Failed to create trigger: {err}")
     
     # Seed categories if empty
     cursor.execute("SELECT COUNT(*) FROM Categories")
@@ -167,19 +167,19 @@ def create_tables_and_seed():
     print(f"Categories table has {count} entries.")
     if count == 0:
         categories = ['Electronics', 'Clothing', 'Books', 'Accessories', 'Other']
-        print(f"🌱 Seeding {len(categories)} default categories...")
+        print(f"Seeding {len(categories)} default categories...")
         for cat in categories:
             try:
                 cursor.execute("INSERT INTO Categories (name) VALUES (%s)", (cat,))
-                print(f"✅ Inserted category: {cat}")
+                print(f"OK Inserted category: {cat}")
             except mysql.connector.Error as err:
-                print(f"❌ Failed to insert category '{cat}': {err}")
+                print(f"X Failed to insert category '{cat}': {err}")
                 # Continue with other categories even if one fails
         print("Category seeding completed.")
     else:
-        print("✅ Categories already seeded.")
+        print("OK Categories already seeded.")
 
     # Only ensure tables exist; do not insert any sample data
     db.conn.commit()
     cursor.close()
-    print("✅ Database tables checked/created successfully.")
+    print("OK Database tables checked/created successfully.")

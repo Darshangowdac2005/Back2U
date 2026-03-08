@@ -79,7 +79,7 @@ def resolve_claim():
                 )
                 email_thread.daemon = True # Ensure thread doesn't block shutdown
                 email_thread.start()
-                print(f"Started email notification thread for Claim {claim_id}")
+                print(f"OK Started background email notification thread for Claim {claim_id} (Item: {item_id}, Claimant: {claimant_id})")
             except Exception as e:
                 print(f"Warning: Failed to start email thread: {e}")
 
