@@ -121,6 +121,10 @@ def main(page: ft.Page):
 
     # --- Routing Logic ---
     def route_change(route):
+        # Prevent memory leak by wiping old event listeners before rendering a new view
+        if hasattr(page, "pubsub"):
+            page.pubsub.unsubscribe_all()
+            
         page.controls.clear()
 
         # Add navbar

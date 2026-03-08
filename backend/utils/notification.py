@@ -64,33 +64,26 @@ def send_email(recipient_email, subject, body, server=None):
         if server is None:
             own_server = True
             log_msg = f"Connecting to {email_host}:{os.getenv('EMAIL_PORT', 587)}..."
-            print(log_msg)
-            with open("email_debug.log", "a") as f: f.write(f"DEBUG: {log_msg}\n")
+            print(f"DEBUG: {log_msg}")
             
             server = smtplib.SMTP(email_host, int(os.getenv('EMAIL_PORT', 587)), timeout=10)
             server.starttls()  
             
             log_msg = f"Logging in as {email_user}..."
-            print(log_msg)
-            with open("email_debug.log", "a") as f: f.write(f"DEBUG: {log_msg}\n")
+            print(f"DEBUG: {log_msg}")
             server.login(email_user, email_pass)
-        
         log_msg = f"Sending email to {recipient_email}..."
-        print(log_msg)
-        with open("email_debug.log", "a") as f: f.write(f"DEBUG: {log_msg}\n")
+        print(f"DEBUG: {log_msg}")
         server.sendmail(sender_email, recipient_email, msg.as_string())
         
         if own_server:
             server.quit()
         
-        with open("email_debug.log", "a") as f:
-            f.write(f"SUCCESS: Sent to {recipient_email}\n")
+        print(f"SUCCESS: Sent to {recipient_email}")
         return True
     except Exception as e:
         error_msg = f"ERROR sending email to {recipient_email}: {e}"
         print(error_msg)
-        with open("email_debug.log", "a") as f:
-            f.write(f"{error_msg}\n")
         # If we failed on our own connection, try to close it
         if own_server and server:
             try: server.quit()
@@ -108,8 +101,7 @@ def insert_notification(user_id, message, notification_type):
     cursor.close()
 
 def log_debug(msg):
-    with open("crash_debug.log", "a") as f:
-        f.write(f"{msg}\n")
+    print(msg)
 
 def send_claim_resolved_emails(item_id, claimant_id, admin_id):
     """

@@ -1,8 +1,9 @@
 # frontend/api_client.py
 
 import requests
+import os
 
-API_BASE_URL = "http://127.0.0.1:5000/api"
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:5000/api")
 TOKEN = None
 USER_ROLE = None
 
