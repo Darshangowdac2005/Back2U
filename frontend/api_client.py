@@ -91,3 +91,22 @@ def report_item_api(report_data):
         return {"error": response.json().get('error', 'Report failed.')}
     except requests.exceptions.RequestException:
         return {"error": "Network error or API offline."}
+
+
+def forgot_password_api(email):
+    url = f"{API_BASE_URL}/auth/forgot-password"
+    try:
+        response = requests.post(url, json={"email": email})
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Network error: {e}"}
+
+
+def reset_password_api(email, otp, new_password):
+    url = f"{API_BASE_URL}/auth/reset-password"
+    data = {"email": email, "otp": otp, "new_password": new_password}
+    try:
+        response = requests.post(url, json=data)
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Network error: {e}"}

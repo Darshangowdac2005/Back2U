@@ -54,3 +54,13 @@ CREATE TABLE IF NOT EXISTS Notifications (
 );
 
 DROP TRIGGER IF EXISTS update_item_status_on_claim_approval;
+
+-- Password Reset OTPs (for Forgot Password flow)
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    otp VARCHAR(6) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+

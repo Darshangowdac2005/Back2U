@@ -10,6 +10,8 @@ from frontend.views.signup_view import SignupView
 from frontend.views.home_view import HomeView
 from frontend.views.report_item_view import ReportItemView
 from frontend.views.admin_dashboard import AdminDashboard
+from frontend.views.forgot_password_view import ForgotPasswordView
+from frontend.views.reset_password_view import ResetPasswordView
 
 # Global State
 app_state = {"token": None, "role": None}
@@ -157,6 +159,14 @@ def main(page: ft.Page):
                 page.snack_bar.open = True
                 page.go("/login")
                 return
+        elif page.route == "/forgot-password":
+            page.controls.append(ForgotPasswordView(page))
+        elif page.route and page.route.startswith("/reset-password"):
+            # Extract optional ?email= query param
+            email = ""
+            if "?email=" in page.route:
+                email = page.route.split("?email=", 1)[1]
+            page.controls.append(ResetPasswordView(page, email=email))
 
         page.update()
 

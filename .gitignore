@@ -1,6 +1,8 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
+venv/
 venv-backend/
 venv-frontend/
 
@@ -15,3 +17,10 @@ flet-assets/
 # Backend (Sensitive Files)
 backend/.env
 backend/uploads/
+
+# Logs & debug files
+*.log
+
+# Media / demo files
+*.mp4
+*.webp

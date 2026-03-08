@@ -52,6 +52,11 @@ class LoginView(ft.Container):
                                     ],
                                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                                 ),
+                                ft.TextButton(
+                                    text="Forgot Password?",
+                                    on_click=lambda e: self.page.go("/forgot-password"),
+                                    style=ft.ButtonStyle(color=ft.colors.BLUE_300),
+                                ),
                                 self.message_text
                             ],
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER,

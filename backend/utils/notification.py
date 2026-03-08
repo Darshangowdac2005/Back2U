@@ -35,8 +35,8 @@ def get_user_email(user_id, cursor=None):
              except: pass
         return None
 
-def send_email(recipient_email, subject, body):
-    """Handles SMTP connection and sends the email."""
+def send_email(recipient_email, subject, body, server=None):
+    """Handles SMTP connection and sends the email. If server is provided, uses it."""
     # Skip email sending if credentials not configured
     sender_email = os.getenv('EMAIL_SENDER')
     email_host = os.getenv('EMAIL_HOST')
@@ -59,12 +59,30 @@ def send_email(recipient_email, subject, body):
     msg['Subject'] = subject
     msg.attach(MIMEText(body, 'plain'))
 
+    own_server = False
     try:
-        server = smtplib.SMTP(os.getenv('EMAIL_HOST'), int(os.getenv('EMAIL_PORT', 587)))
-        server.starttls()  
-        server.login(os.getenv('EMAIL_USER'), os.getenv('EMAIL_PASS'))
+        if server is None:
+            own_server = True
+            log_msg = f"Connecting to {email_host}:{os.getenv('EMAIL_PORT', 587)}..."
+            print(log_msg)
+            with open("email_debug.log", "a") as f: f.write(f"DEBUG: {log_msg}\n")
+            
+            server = smtplib.SMTP(email_host, int(os.getenv('EMAIL_PORT', 587)), timeout=10)
+            server.starttls()  
+            
+            log_msg = f"Logging in as {email_user}..."
+            print(log_msg)
+            with open("email_debug.log", "a") as f: f.write(f"DEBUG: {log_msg}\n")
+            server.login(email_user, email_pass)
+        
+        log_msg = f"Sending email to {recipient_email}..."
+        print(log_msg)
+        with open("email_debug.log", "a") as f: f.write(f"DEBUG: {log_msg}\n")
         server.sendmail(sender_email, recipient_email, msg.as_string())
-        server.quit()
+        
+        if own_server:
+            server.quit()
+        
         with open("email_debug.log", "a") as f:
             f.write(f"SUCCESS: Sent to {recipient_email}\n")
         return True
@@ -73,6 +91,10 @@ def send_email(recipient_email, subject, body):
         print(error_msg)
         with open("email_debug.log", "a") as f:
             f.write(f"{error_msg}\n")
+        # If we failed on our own connection, try to close it
+        if own_server and server:
+            try: server.quit()
+            except: pass
         return False
 
 def insert_notification(user_id, message, notification_type):
@@ -92,7 +114,7 @@ def log_debug(msg):
 def send_claim_resolved_emails(item_id, claimant_id, admin_id):
     """
     Sends resolution emails to both the reporter and the claimant.
-    Uses the thread-safe db singleton.
+    Uses the thread-safe db singleton and a single SMTP connection.
     """
     log_debug(f"Starting send_claim_resolved_emails for Item {item_id}")
     
@@ -128,46 +150,76 @@ def send_claim_resolved_emails(item_id, claimant_id, admin_id):
             log_debug("Missing user data.")
             return
 
-        # Email to Original Reporter (Item Found/Returned)
+        # Prepare messages
         reporter_subject = f"SUCCESS: Your Item '{item_title}' Has Been RESOLVED!"
         reporter_body = f"Hello {reporter['name']},\n\nGood news! Your item, '{item_title}', has been verified by the Admin (ID: {admin_id}) and matched with the person who found it. Please contact the claimant, {claimant['name']}, to arrange collection. Your contact details have been shared with them."
 
-        log_debug("Sending email to reporter...")
-        if send_email(reporter['email'], reporter_subject, reporter_body):
-             try:
-                log_debug("Inserting notification for reporter...")
-                cursor_notif = db.get_cursor()
-                query = "INSERT INTO Notifications (user_id, message, type, status) VALUES (%s, %s, %s, %s)"
-                cursor_notif.execute(query, (reporter_id, "Item successfully matched and resolved. Check your email for details!", Notification.TYPES['EMAIL'], Notification.STATUSES['SENT']))
-                db.conn.commit()
-                cursor_notif.close()
-                log_debug("Notification inserted.")
-             except Exception as e:
-                 print(f"Error inserting notification: {e}")
-                 log_debug(f"Error inserting notification: {e}")
-
-        # Email to Claimant (Verification Approved)
         claimant_subject = f"SUCCESS: Your Claim on '{item_title}' Has Been APPROVED!"
         claimant_body = f"Hello {claimant['name']},\n\nYour claim on '{item_title}' has been successfully approved! Please contact the original reporter, {reporter['name']}, to arrange the return of the item. Their email is {reporter['email']}."
 
+        # Setup one SMTP connection for both
+        email_host = os.getenv('EMAIL_HOST')
+        email_user = os.getenv('EMAIL_USER')
+        email_pass = os.getenv('EMAIL_PASS')
+        email_port = int(os.getenv('EMAIL_PORT', 587))
+        
+        server = None
+        if all([email_host, email_user, email_pass]):
+            try:
+                log_debug("Opening single SMTP connection...")
+                server = smtplib.SMTP(email_host, email_port, timeout=10)
+                server.starttls()
+                server.login(email_user, email_pass)
+            except Exception as e:
+                log_debug(f"Failed to open SMTP connection: {e}")
+                server = None
+
+        # Send to Reporter
+        log_debug("Sending email to reporter...")
+        rep_sent = False
+        if server:
+            rep_sent = send_email(reporter['email'], reporter_subject, reporter_body, server=server)
+        
+        # ALWAYS insert notification for reporter
+        try:
+            log_debug("Inserting notification for reporter...")
+            cursor_notif = db.get_cursor()
+            query = "INSERT INTO Notifications (user_id, message, type, status) VALUES (%s, %s, %s, %s)"
+            status = Notification.STATUSES['SENT'] if rep_sent else Notification.STATUSES['PENDING']
+            cursor_notif.execute(query, (reporter_id, f"Item '{item_title}' successfully matched and resolved. Check your email for details!", Notification.TYPES['EMAIL'], status))
+            db.conn.commit()
+            cursor_notif.close()
+            log_debug("Notification inserted.")
+        except Exception as e:
+            log_debug(f"Error inserting reporter notification: {e}")
+
+        # Send to Claimant
         log_debug("Sending email to claimant...")
-        if send_email(claimant['email'], claimant_subject, claimant_body):
-             try:
-                log_debug("Inserting notification for claimant...")
-                cursor_notif = db.get_cursor()
-                query = "INSERT INTO Notifications (user_id, message, type, status) VALUES (%s, %s, %s, %s)"
-                cursor_notif.execute(query, (claimant_id, "Claim approved. Check your email for reporter's contact info.", Notification.TYPES['EMAIL'], Notification.STATUSES['SENT']))
-                db.conn.commit()
-                cursor_notif.close()
-                log_debug("Notification inserted.")
-             except Exception as e:
-                 print(f"Error inserting notification: {e}")
-                 log_debug(f"Error inserting notification: {e}")
+        cla_sent = False
+        if server:
+            cla_sent = send_email(claimant['email'], claimant_subject, claimant_body, server=server)
+        
+        # ALWAYS insert notification for claimant
+        try:
+            log_debug("Inserting notification for claimant...")
+            cursor_notif = db.get_cursor()
+            query = "INSERT INTO Notifications (user_id, message, type, status) VALUES (%s, %s, %s, %s)"
+            status = Notification.STATUSES['SENT'] if cla_sent else Notification.STATUSES['PENDING']
+            cursor_notif.execute(query, (claimant_id, f"Claim on '{item_title}' approved. Check your email for reporter's contact info.", Notification.TYPES['EMAIL'], status))
+            db.conn.commit()
+            cursor_notif.close()
+            log_debug("Notification inserted.")
+        except Exception as e:
+            log_debug(f"Error inserting claimant notification: {e}")
+
+        if server:
+            try: server.quit()
+            except: pass
 
     except Exception as e:
         print(f"Error in send_claim_resolved_emails (background): {e}")
         log_debug(f"CRASH: {e}")
     finally:
-        # Close the connection for THIS thread to avoid leaks
         db.close()
+
 
